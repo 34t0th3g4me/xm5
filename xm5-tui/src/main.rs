@@ -571,12 +571,15 @@ fn quick_engine_args(id: &str) -> Option<Vec<&'static str>> {
 ///  ╭────╮
 ///  │K ic│     key badge in top-left, icon+label on a soft pill bg;
 ///  ╰────╯     armed → filled FG pill with BG text (matches ANC pods),
-///             hover → border + text FG, flash → ACCENT border burst
+///             hover → border + text FG, flash → ACCENT border burst.
+/// The mid row is padded to the exact tile width so the right border always
+/// closes (icon glyphs are width-1; labels are truncated when they don't fit).
 fn quick_pill(f: &mut Frame, area: Rect, a: &QAct, hover: bool, flash: bool) {
-    if area.width < 5 {
+    if area.width < 6 || area.height < 2 {
         return;
     }
     let w = area.width;
+    let inner = w as usize - 2;
     let (brd, txt, fill, keybg, keyfg) = if a.armed {
         (FG, BG, FG, BG, FG)
     } else if flash {
@@ -586,23 +589,28 @@ fn quick_pill(f: &mut Frame, area: Rect, a: &QAct, hover: bool, flash: bool) {
     } else {
         (TILE_BORDER, DIM, TILE, TILE2, DIM)
     };
+    let key_badge = a.key.to_string();
+    // inside the borders: " K icon label…  " → 3 spaces + key + icon + label
+    let fixed = key_badge.chars().count() + 4;
+    let lab_max = inner.saturating_sub(fixed);
+    // reserve the trailing space first, then truncate the label to fit
+    let label: String = a.label.chars().take(lab_max.max(1) - 1).collect();
+    let pad = inner.saturating_sub(fixed + label.chars().count());
     let top = Line::from(Span::styled(
-        format!("╭{}╮", "─".repeat(w.saturating_sub(2) as usize)),
+        format!("╭{}╮", "─".repeat(inner)),
         Style::default().fg(brd),
     ));
     let bot = Line::from(Span::styled(
-        format!("╰{}╯", "─".repeat(w.saturating_sub(2) as usize)),
+        format!("╰{}╯", "─".repeat(inner)),
         Style::default().fg(brd),
     ));
-    // mid row: key badge + icon + label, bg = fill
-    let key_badge = if a.key.is_empty() { " ".to_string() } else { a.key.to_string() };
     let mid = Line::from(vec![
         Span::styled("│", Style::default().fg(brd)),
         Span::styled(" ", Style::default().bg(fill)),
         Span::styled(
             key_badge,
             Style::default().fg(keyfg).bg(if a.key.is_empty() { fill } else { keybg })
-                .add_modifier(if !a.key.is_empty() { Modifier::BOLD } else { Modifier::empty() }),
+                .add_modifier(if a.key.is_empty() { Modifier::empty() } else { Modifier::BOLD }),
         ),
         Span::styled(" ", Style::default().bg(fill)),
         Span::styled(
@@ -612,11 +620,11 @@ fn quick_pill(f: &mut Frame, area: Rect, a: &QAct, hover: bool, flash: bool) {
         ),
         Span::styled(" ", Style::default().bg(fill)),
         Span::styled(
-            a.label,
+            label,
             Style::default().fg(if a.armed { BG } else { txt }).bg(fill)
                 .add_modifier(if a.armed { Modifier::BOLD } else { Modifier::empty() }),
         ),
-        Span::styled(" ", Style::default().bg(fill)),
+        Span::styled(" ".repeat(pad), Style::default().bg(fill)),
         Span::styled("│", Style::default().fg(brd)),
     ]);
     f.render_widget(top, Rect { x: area.x, y: area.y, width: w, height: 1 });
@@ -645,14 +653,21 @@ fn quick_tile(f: &mut Frame, inner: Rect, app: &mut App) -> String {
     } else {
         (wi.saturating_sub(per_row - 1)) / per_row
     };
-    let h2 = inner.height >= 4 && wi >= 24; // 2 chip/pill rows fit
-    let row_h: u16 = if inner.height >= 7 && wi >= 24 { 3 } else { 2 };
-    let show_status = inner.height >= 8 && wi >= 24; // full: status + 2 pill rows
+    let wide = wi >= 24;
+    let avail = inner.height as usize;
+    // bordered pills need 3 rows each plus a status line (2 rows × 3 + 1);
+    // anything shorter falls back to 1-row chips for as many rows as fit
+    let (row_h, nrows, show_status): (u16, usize, bool) = if wide && avail >= 7 {
+        (3, 2, true)
+    } else if wide {
+        (1, avail.max(1), false)
+    } else {
+        (1, 1, false)
+    };
     let mut cons: Vec<Constraint> = vec![];
     if show_status {
         cons.push(Constraint::Length(1));
     }
-    let nrows: usize = if h2 { 2 } else { 1 };
     for _ in 0..nrows {
         cons.push(Constraint::Length(row_h));
     }
@@ -676,7 +691,7 @@ fn quick_tile(f: &mut Frame, inner: Rect, app: &mut App) -> String {
         );
     }
     for (gi, a) in acts.iter().enumerate() {
-        if !h2 && gi >= 3 { break; } // tiny tiles: first row only
+        if gi >= nrows * per_row { break; } // only the rows that fit
         let row = gi / per_row;
         let col = gi % per_row;
         let area = Rect {
@@ -802,24 +817,29 @@ fn stagger_border(app: &App, idx: usize) -> Option<Color> {
 
 /// distribute `total` rows among tiles: start at mins, grow round-robin in
 /// `order` until caps reached. Keeps layouts alive at any terminal size.
+/// Entries with min 0 AND cap 0 are disabled and never receive rows.
 fn grow(total: u16, mins: &[u16], caps: &[u16], order: &[usize]) -> Vec<u16> {
     let mut hs: Vec<u16> = mins.to_vec();
     let mut rem = total.saturating_sub(hs.iter().copied().sum());
+    let on: Vec<usize> = order.iter().copied().filter(|&o| caps[o] > 0 || mins[o] > 0).collect();
+    if on.is_empty() {
+        return hs;
+    }
     let mut idx = 0;
     while rem > 0 {
-        let &o = order.get(idx % order.len()).unwrap();
+        let &o = on.get(idx % on.len()).unwrap();
         idx += 1;
         if hs[o] < caps[o] {
             hs[o] += 1;
             rem -= 1;
-        } else if order.iter().all(|&k| hs[k] >= caps[k]) {
+        } else if on.iter().all(|&k| hs[k] >= caps[k]) {
             break;
         }
     }
     // leftovers beyond all caps go round-robin to the LAST tiles in order
     // (most elastic widgets), so tall terminals fill instead of blanking
     if rem > 0 {
-        let tail: Vec<usize> = order.iter().rev().copied().collect();
+        let tail: Vec<usize> = on.iter().rev().copied().collect();
         let mut ti = 0;
         while rem > 0 && !tail.is_empty() {
             let o = tail[ti % tail.len()];
@@ -829,6 +849,83 @@ fn grow(total: u16, mins: &[u16], caps: &[u16], order: &[usize]) -> Vec<u16> {
         }
     }
     hs
+}
+
+/// like `grow`, but when the mins don't fit `total` it disables `optional`
+/// tiles (in order) and then shrinks the lowest-priority tiles instead of
+/// over-allocating rows the terminal doesn't have.
+fn grow_fit(
+    total: u16,
+    mins: &[u16],
+    caps: &[u16],
+    order: &[usize],
+    optional: &[usize],
+    floor: &[u16],
+) -> Vec<u16> {
+    let mut mins = mins.to_vec();
+    let mut caps = caps.to_vec();
+    let tail: Vec<usize> = order.iter().rev().copied().collect();
+    // shrink the growth order's tail (least useful tiles) down to its floor;
+    // returns false when nothing can shrink any further
+    let shrink_all = |mins: &mut Vec<u16>, caps: &Vec<u16>| -> bool {
+        for &o in &tail {
+            let fl = floor.get(o).copied().unwrap_or(0).min(caps[o]);
+            if mins[o] > fl {
+                mins[o] -= 1;
+                return true;
+            }
+        }
+        false
+    };
+    // drop an optional tile only once the remaining tiles are already at their
+    // floors — a taller terminal keeps the optional tile instead of wasting
+    // rows on oversized mandatory ones
+    for &o in optional {
+        while mins.iter().copied().sum::<u16>() > total {
+            if !shrink_all(&mut mins, &caps) {
+                mins[o] = 0;
+                caps[o] = 0;
+                break;
+            }
+        }
+    }
+    while mins.iter().copied().sum::<u16>() > total {
+        if !shrink_all(&mut mins, &caps) {
+            break;
+        }
+    }
+    grow(total, &mins, &caps, order)
+}
+
+/// stacked (single-column) tile heights. Index map: 0=dev 1=anc 2=vol
+/// 3=quick 4=mic 5=media. Tiles that cannot reach their viable minimum
+/// (`floor`) are dropped and the rest re-fitted, so every rendered tile has
+/// room for its content and the column fits the terminal exactly.
+fn stacked_heights(rows: u16) -> [u16; 6] {
+    let mut want = [true; 6];
+    want[4] = rows >= 14; // mic scope (dropped by the floor check when short)
+    want[5] = rows >= 16; // media
+    // floor = viable minimum (mic: info + 3 scope rows; media: title + body)
+    let floor = [3u16, 3, 3, 3, 6, 5];
+    let comfort = [3u16, 5, 5, 4, 6, 5];
+    let cap = [4u16, 7, 6, 6, 8, 6];
+    let order = [2usize, 1, 4, 0, 3, 5];
+    loop {
+        let mins: Vec<u16> = (0..6).map(|i| if want[i] { comfort[i] } else { 0 }).collect();
+        let caps: Vec<u16> = (0..6).map(|i| if want[i] { cap[i] } else { 0 }).collect();
+        let hs = grow_fit(rows, &mins, &caps, &order, &[5, 4], &floor);
+        // drop the least important tiles that came out below their minimum
+        let mut dropped = false;
+        for i in [5usize, 4] {
+            if want[i] && hs[i] < floor[i] {
+                want[i] = false;
+                dropped = true;
+            }
+        }
+        if !dropped {
+            return [hs[0], hs[1], hs[2], hs[3], hs[4] * u16::from(want[4]), hs[5] * u16::from(want[5])];
+        }
+    }
 }
 
 fn lerp_col(a: Color, b: Color, t: f32) -> Color {
@@ -892,50 +989,10 @@ fn media_tile(f: &mut Frame, area: Rect, app: &mut App) {
     let player = app.media.player.clone();
     let w = area.width;
     let h = area.height;
-    // one-row compact (stacked, media_h=3 → inner h=1): "󰝚 spotify · playing · track"
-    if h < 2 {
-        let p = match app.media.player.clone() {
-            Some(p) => p,
-            None => {
-                f.render_widget(
-                    Line::from(Span::styled(" 󰝚 media player — player with MPRIS (spotify, mpv, firefox …)", Style::default().fg(FAINT))),
-                    Rect { x: area.x + 1, y: area.y, width: w.saturating_sub(2), height: 1 },
-                );
-                return;
-            }
-        };
-        let stat = match p.status.as_str() {
-            "playing" => "playing",
-            "paused" => "paused",
-            _ => "stop",
-        };
-        let track = if !p.title.is_empty() {
-            if p.artist.is_empty() { p.title.clone() } else { format!("{} — {}", p.artist, p.title) }
-        } else {
-            String::new()
-        };
-        let mut spans = vec![
-            Span::styled(" 󰝚 ", Style::default().fg(if p.status == "playing" { GREEN } else { DIM })),
-            Span::styled(p.identity, Style::default().fg(FG).add_modifier(Modifier::BOLD)),
-            Span::styled(format!(" · {}", stat), Style::default().fg(DIM)),
-        ];
-        if !track.is_empty() {
-            spans.push(Span::styled(" · ", Style::default().fg(FAINT)));
-            spans.push(Span::styled(track, Style::default().fg(DIM)));
-        }
-        if !app.media.calls.is_empty() {
-            spans.push(Span::styled(
-                format!("   󰔰{}", app.media.calls.join("·")),
-                Style::default().fg(ACCENT),
-            ));
-        }
-        f.render_widget(
-            Line::from(spans),
-            Rect { x: area.x + 1, y: area.y, width: w.saturating_sub(2), height: 1 },
-        );
-        return;
-    }
-    if w < 16 {
+    // the full-width stacked variant and the wide shared-row variant both need
+    // a real body (title row + status); a tile with less than two inner rows
+    // cannot render anything meaningful, so skip it entirely
+    if h < 2 || w < 16 {
         return;
     }
 
@@ -1209,7 +1266,7 @@ fn draw(f: &mut Frame, app: &mut App) {
     app.frame = app.frame.wrapping_add(1);
     app.btn_rects.clear();
 
-    let fits_wide = w >= 78 && h >= 13;
+    let fits_wide = w >= 78 && h >= 14;
     let fits_narrow = w >= 50 && h >= 17;
     if !fits_wide && !fits_narrow {
         f.render_widget(
@@ -1222,40 +1279,43 @@ fn draw(f: &mut Frame, app: &mut App) {
         );
         return;
     }
-    let wide = fits_wide;
     let header_h = 1u16;
     let footer_h = 1u16;
     let rows = h - header_h - footer_h;
-    let with_media = wide && rows >= 16;
-    let (main_h, vq_h, mic_h, media_h, dev_h, anc_h, vol_h, quick_h, stacked) = if w >= 140 {
-        // fullscreen wide: main pair on top, then media LEFT and mic RIGHT
-        // in one shared row
-        let two_col = rows >= 14;
-        let media_min = if with_media { 6 } else { 0 };
-        let hs = if two_col {
-            // shared media/mic row: row height = max(media, mic). Caps are
-            // the "comfort" minimums; grow()'s tail pass keeps feeding BOTH
-            // (they end the order, so equal shares go to media+mic) —
-            // tall terminals stretch the media/mic row instead of blanking
-            grow(
-                rows,
-                &[5, 4, media_min, 3],
-                &[7, 6, if with_media { 9 } else { 0 }, 9],
-                &[0, 1, 3, 2],
-            )
-        } else {
-            grow(rows, &[5, 4, 0, 0], &[7, 6, 0, 0], &[0, 1])
-        };
-        (hs[0], hs[1], hs[3], hs[2], 0, 0, 0, 0, false)
+
+    // one flexible media tile row, shaped per terminal width: full width in the
+    // stacked single-column layout, media LEFT + mic RIGHT in a shared row for
+    // wide terminals
+    let media_full_w = w < 140;
+    // mic scope: info line + three scope rows is the smallest form that still
+    // reads as a waveform; media: a title row plus body
+    let mic_on = rows >= 14;
+    let media_on = rows >= 16;
+    let mic_min: u16 = if mic_on { 6 } else { 0 };
+    let mic_cap: u16 = if mic_on { 8 } else { 0 };
+    let media_min: u16 = if media_on { 5 } else { 0 };
+    let media_cap: u16 = if media_on { 6 } else { 0 };
+
+
+    let (main_h, vq_h, mic_h, media_h, dev_h, anc_h, vol_h, quick_h, stacked) = if !media_full_w {
+        // wide: device/noise-cancel pair, volume/quick pair, then media and mic
+        // sharing one elastic row (Min absorbs the terminal's leftover rows)
+        let hs = grow_fit(
+            rows,
+            &[5, 4, media_min.max(mic_min)],
+            &[7, 6, media_cap.max(mic_cap)],
+            &[0, 1, 2],
+            &[2],
+            &[5, 4, 0],
+        );
+        let flex = hs[2]; // shared row height, 0 when the terminal is too short
+        let mic = if mic_on && flex >= mic_min { flex } else { 0 };
+        let media = if media_on && flex >= media_min { flex } else { 0 };
+        (hs[0], hs[1], mic, media, 0, 0, 0, 0, false)
     } else {
-        let with_mic = rows >= 19;
-        // indices: 0=dev 1=anc 2=vol 3=quick 4=mic 5=media — grow volume, then
-        // anc, mic, device details, quick chips last; media gets the scraps
-        let hs = if with_mic {
-            grow(rows, &[3, 5, 4, 4, 3, 3], &[4, 7, 6, 6, 8, 6], &[2, 1, 4, 0, 3])
-        } else {
-            grow(rows, &[3, 5, 4, 4, 0, 0], &[4, 7, 6, 6, 0, 0], &[2, 1, 0, 3])
-        };
+        // stacked single column, documented order:
+        // device · ANC · [media] · volume · quick · mic
+        let hs = stacked_heights(rows);
         (0, 0, hs[4], hs[5], hs[0], hs[1], hs[2], hs[3], true)
     };
     let outer = Layout::default()
@@ -1265,9 +1325,13 @@ fn draw(f: &mut Frame, app: &mut App) {
             if stacked {
                 c.push(Constraint::Length(dev_h));
                 c.push(Constraint::Length(anc_h));
-                c.push(Constraint::Length(media_h));
+                if media_h > 0 {
+                    c.push(Constraint::Length(media_h));
+                }
                 c.push(Constraint::Length(vol_h));
                 c.push(Constraint::Length(quick_h));
+                // the mic scope is the last content row, full width
+                c.push(Constraint::Length(mic_h));
             } else {
                 c.push(Constraint::Length(main_h));
                 c.push(Constraint::Length(vq_h));
@@ -1286,6 +1350,11 @@ fn draw(f: &mut Frame, app: &mut App) {
     // shared content margins
     let mx = (w / 12).max(3).min(12);
     let content_w = w.saturating_sub(mx * 2);
+    // stacked row indices (outer[0] is the header)
+    let stacked_media = stacked && media_h > 0;
+    let vol_row = 3 + usize::from(stacked_media);
+    let quick_row = vol_row + 1;
+    let mic_row = quick_row + 1;
 
     // header: breathing dot (green↔light-green), name, battery right
     let name = app.status.name.clone().unwrap_or_else(|| "WH-1000XM5".into());
@@ -1338,11 +1407,12 @@ fn draw(f: &mut Frame, app: &mut App) {
     // content rows: either two-col pairs or stacked singles
     let (dev_area, anc_area, vol_area, quick_area, media_area): (Rect, Rect, Rect, Rect, Rect);
     if stacked {
+        // stacked rows: 1 device, 2 anc, [3 media], then mic, volume, quick
         dev_area = outer[1];
         anc_area = outer[2];
-        media_area = outer[3];
-        vol_area = outer[4];
-        quick_area = outer[5];
+        media_area = if stacked_media { outer[3] } else { Rect::default() };
+        vol_area = outer[vol_row];
+        quick_area = outer[quick_row];
     } else {
         media_area = if media_h > 0 {
             outer[3]
@@ -1420,27 +1490,30 @@ fn draw(f: &mut Frame, app: &mut App) {
                 ]),
                 Rect { x: dev_inner.x + 1, y: y[0], width: dw, height: 1 },
             );
-            if h_in >= 3 {
+            if h_in >= 2 {
                 let codec = app.status.codec.clone().unwrap_or_default();
                 let mpill_col = match app.status.mode.as_str() {
                     "music" => GREEN,
                     "mic" => ACCENT,
                     _ => TILE2,
                 };
-                f.render_widget(
-                    Line::from(vec![
-                        Span::styled("mode ", Style::default().fg(DIM)),
-                        Span::styled(
-                            mode_txt,
-                            Style::default().bg(mpill_col)
-                                .fg(if mode_dim { DIM } else { BG })
-                                .add_modifier(Modifier::BOLD),
-                        ),
-                        Span::raw(" "),
-                        Span::styled(codec.to_lowercase(), Style::default().bg(TILE2).fg(DIM)),
-                    ]),
-                    Rect { x: dev_inner.x + 1, y: y[1], width: dw, height: 1 },
-                );
+                if h_in >= 3 {
+                    f.render_widget(
+                        Line::from(vec![
+                            Span::styled("mode ", Style::default().fg(DIM)),
+                            Span::styled(
+                                mode_txt,
+                                Style::default().bg(mpill_col)
+                                    .fg(if mode_dim { DIM } else { BG })
+                                    .add_modifier(Modifier::BOLD),
+                            ),
+                            Span::raw(" "),
+                            Span::styled(codec.to_lowercase(), Style::default().bg(TILE2).fg(DIM)),
+                        ]),
+                        Rect { x: dev_inner.x + 1, y: y[1], width: dw, height: 1 },
+                    );
+                }
+                let link_y = if h_in >= 3 { y[2] } else { y[1] };
                 f.render_widget(
                     Line::from(vec![
                         Span::styled("󰂯 ", Style::default().fg(if app.status.connected { GREEN } else { FAINT })),
@@ -1453,7 +1526,7 @@ fn draw(f: &mut Frame, app: &mut App) {
                             Style::default().fg(if app.status.connected { DIM } else { RED }),
                         ),
                     ]),
-                    Rect { x: dev_inner.x + 1, y: y[2], width: dw, height: 1 },
+                    Rect { x: dev_inner.x + 1, y: link_y, width: dw, height: 1 },
                 );
             }
         }
@@ -1592,26 +1665,12 @@ fn draw(f: &mut Frame, app: &mut App) {
     // ---------- quick actions (new pill grid)
     let quick_inner = tile(f, quick_area, Some(("quick", DIM)), stagger_border(app, 3));
     let quick_ui = quick_tile(f, quick_inner, app);
-    // ---------- media (MPRIS transport + calls)
-    if media_area.width > 8 {
-        // wide: media shares its row with mic (media LEFT 46%)
-        let media_final = if !stacked && media_h > 0 && mic_h > 0 {
-            let r = Layout::default()
-                .direction(Direction::Horizontal)
-                .constraints([Constraint::Percentage(46), Constraint::Percentage(54)])
-                .split(media_area);
-            r[0]
-        } else {
-            media_area
-        };
-        let media_inner = tile(f, media_final, Some(("media", DIM)), stagger_border(app, if stacked { 3 } else { 4 }));
-        media_tile(f, media_inner, &mut *app);
-    }
-
-    // ---------- mic scope (full width stacked; RIGHT beside media in wide)
+    // ---------- mic scope (full width stacked; RIGHT beside media in wide).
+    // Drawn before media so the tile that may be clipped is the one whose
+    // content can degrade (media hides lines; the scope must stay intact).
     if mic_h > 0 {
         let mic_area = if stacked {
-            outer[6]
+            outer[mic_row]
         } else if media_h > 0 {
             // share the media row: mic takes the right part (54%)
             let r = Layout::default()
@@ -1623,11 +1682,10 @@ fn draw(f: &mut Frame, app: &mut App) {
             Rect { x: mx, y: outer[3].y, width: content_w, height: outer[3].height }
         };
         let mic_inner = tile(f, mic_area, Some(("microphone", DIM)), stagger_border(app, if stacked { 4 } else { 5 }));
+        // info line on top, scope fills the rest
         let m_rows = Layout::default()
             .direction(Direction::Vertical)
             .constraints(if mic_inner.height >= 2 {
-                // info top; scope takes everything else (the mic tile is the
-                // flexible one in the shared row)
                 vec![Constraint::Length(1), Constraint::Min(1)]
             } else {
                 vec![Constraint::Min(0)]
@@ -1676,12 +1734,11 @@ fn draw(f: &mut Frame, app: &mut App) {
                 ),
             ]
         };
-        // 3+ rows → info line + mirror scope; single row → info only
-        if mic_inner.height >= 3 {
+        // 2+ rows → info line plus scope (1 row collapses to the info line);
+        // single row → scope only, the compact "live ▁▅█" form
+        if mic_inner.height >= 2 {
             f.render_widget(Line::from(info), m_rows[0]);
             draw_scope(f, mic_inner, m_rows[1], app);
-        } else if mic_inner.height == 2 {
-            draw_scope(f, mic_inner, m_rows[0], app);
         } else {
             // one-row fallback: " 󰋎  idle" / " 󰋎 live · 6 dB ▁▅█▂.."
             let width = (mic_inner.width.saturating_sub(4) as usize).max(0);
@@ -1721,12 +1778,46 @@ fn draw(f: &mut Frame, app: &mut App) {
         }
     }
 
+    // ---------- media (MPRIS transport + calls)
+    if media_area.width > 8 && media_area.height > 0 {
+        // wide: media shares its row with mic (media LEFT 46%)
+        let media_final = if !stacked && media_h > 0 && mic_h > 0 {
+            let r = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([Constraint::Percentage(46), Constraint::Percentage(54)])
+                .split(media_area);
+            r[0]
+        } else {
+            media_area
+        };
+        let media_inner = tile(f, media_final, Some(("media", DIM)), stagger_border(app, if stacked { 4 } else { 5 }));
+        media_tile(f, media_inner, &mut *app);
+    }
+
     // footer: quick chips (stateful) + mode line + hints
     {
         let foot_y = h.saturating_sub(1);
         let acts = quick_actions(app);
+        let foot = Rect { x: mx, y: foot_y, width: content_w, height: 1 };
+        // reserve the right side for the mode status, then fill the left with
+        // as many action chips as fit: anything past the budget is left out
+        // instead of being clipped or overlapping the status text
+        let st_w = if quick_ui.is_empty() {
+            0
+        } else {
+            let n = quick_ui.chars().count() as u16;
+            if n + 3 <= foot.width / 2 { n + 2 } else { foot.width / 2 }
+        };
+        let budget = foot.width.saturating_sub(st_w + 1);
         let mut spans: Vec<Span<'static>> = vec![];
+        let mut used = 0u16;
         for a in acts.iter().take(4) {
+            let w = (a.key.chars().count() + a.icon.chars().count()
+                + a.label.chars().count() + 2) as u16;
+            if used + w > budget {
+                break;
+            }
+            used += w;
             let on = a.armed;
             let hv = app.hover.as_deref() == Some(a.id);
             let (kbg, kfg, tbg, tfg) = if on {
@@ -1746,13 +1837,22 @@ fn draw(f: &mut Frame, app: &mut App) {
             ));
             spans.push(Span::raw(" "));
         }
-        spans.push(Span::styled("+/− vol · q done", Style::default().fg(FAINT)));
-        f.render_widget(Paragraph::new(Line::from(spans)), Rect { x: mx, y: foot_y, width: content_w, height: 1 });
+        let hint = "+/− vol · q done";
+        if used + hint.chars().count() as u16 + 1 <= budget {
+            spans.push(Span::styled(hint, Style::default().fg(FAINT)));
+        }
         f.render_widget(
-            Paragraph::new(Span::styled(quick_ui.clone(), Style::default().fg(DIM)))
-                .alignment(ratatui::layout::Alignment::Right),
-            Rect { x: mx, y: foot_y, width: content_w, height: 1 },
+            Paragraph::new(Line::from(spans)),
+            Rect { x: foot.x, y: foot_y, width: foot.width.saturating_sub(st_w), height: 1 },
         );
+        if st_w > 0 {
+            let sr = Rect { x: foot.x + foot.width - st_w, y: foot_y, width: st_w, height: 1 };
+            f.render_widget(
+                Paragraph::new(Span::styled(quick_ui.clone(), Style::default().fg(DIM)))
+                    .alignment(ratatui::layout::Alignment::Right),
+                sr,
+            );
+        }
     }
 
     // help overlay: key badges + description, grouped
@@ -2160,7 +2260,9 @@ fn run_app(mut terminal: Terminal<CrosstermBackend<Stdout>>) -> io::Result<()> {
                                 app.help = false;
                                 continue;
                             }
-                            if app.vol_rect.width > 0 && app.vol_rect.contains(ratatui::layout::Position { x, y }) {
+                            if app.vol_rect.width > 0
+                                && app.vol_rect.contains(ratatui::layout::Position { x, y })
+                            {
                                 let rel = (x - app.vol_rect.x) as f64 / app.vol_rect.width as f64;
                                 let target = (rel * 100.0).round().clamp(0.0, 100.0) as u8;
                                 vol_set(&mut app, target);
@@ -2169,7 +2271,8 @@ fn run_app(mut terminal: Terminal<CrosstermBackend<Stdout>>) -> io::Result<()> {
                             let mut hit = false;
                             for i in 0..3 {
                                 if app.pod_rects[i].width > 0
-                                    && app.pod_rects[i].contains(ratatui::layout::Position { x, y }) {
+                                    && app.pod_rects[i].contains(ratatui::layout::Position { x, y })
+                                {
                                     let cur = app.anc();
                                     pod_click(&mut app, i, &cur);
                                     hit = true;
@@ -2178,7 +2281,9 @@ fn run_app(mut terminal: Terminal<CrosstermBackend<Stdout>>) -> io::Result<()> {
                             }
                             if !hit {
                                 for (r, t) in &app.btn_rects {
-                                    if r.width > 0 && r.contains(ratatui::layout::Position { x, y }) {
+                                    if r.width > 0
+                                        && r.contains(ratatui::layout::Position { x, y })
+                                    {
                                         if let Some(args) = quick_engine_args(t) {
                                             let label = match *t {
                                                 "music" => "music mode",
@@ -2207,9 +2312,11 @@ fn run_app(mut terminal: Terminal<CrosstermBackend<Stdout>>) -> io::Result<()> {
                             }
                         }
                         MouseEventKind::Drag(_) => {
-                            if app.vol_rect.width > 0 && y == app.vol_rect.y
-                                && x >= app.vol_rect.x && x < app.vol_rect.x + app.vol_rect.width {
-                                let rel = (x - app.vol_rect.x) as f64 / app.vol_rect.width as f64;
+                            let vr = app.vol_rect;
+                            if vr.width > 0 && y == vr.y
+                                && x >= vr.x && x < vr.x + vr.width
+                            {
+                                let rel = (x - vr.x) as f64 / vr.width as f64;
                                 let target = (rel * 100.0).round().clamp(0.0, 100.0) as u8;
                                 vol_set(&mut app, target);
                             }
@@ -2219,13 +2326,15 @@ fn run_app(mut terminal: Terminal<CrosstermBackend<Stdout>>) -> io::Result<()> {
                             let labels = ["noise cancel", "ambient", "off"];
                             for i in 0..3 {
                                 if app.pod_rects[i].width > 0
-                                    && app.pod_rects[i].contains(ratatui::layout::Position { x, y }) {
+                                    && app.pod_rects[i].contains(ratatui::layout::Position { x, y })
+                                {
                                     hov = Some(labels[i].to_string());
                                 }
                             }
                             if app.vol_rect.width > 0
                                 && y >= app.vol_rect.y.saturating_sub(1) && y <= app.vol_rect.y + 2
-                                && x >= app.vol_rect.x && x < app.vol_rect.x + app.vol_rect.width {
+                                && x >= app.vol_rect.x && x < app.vol_rect.x + app.vol_rect.width
+                            {
                                 hov = Some("volume".into());
                                 app.vol_hover_x = Some(x);
                             } else {

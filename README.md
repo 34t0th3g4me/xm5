@@ -79,12 +79,16 @@ rounded borders, white active pods, green status dot):
 `+`/`-` volume · `m/v/t` music/mic/toggle · `e` mic DSP · `r` repair ·
 `F` refresh · `q` quit
 
-**Layout**: responsive — 78×13+ two columns, narrower stacks into one column
-(device · ANC · volume · quick · mic). Tile heights grow round-robin
-(volume → ANC → mic → device → quick). The mic scope shows the incoming XM5
-track live (pw-cat capture, ~8 fps, dB + last level in accent blue); when
-there is no device or the mic is inactive, a hint about mic mode appears.
-Footer is minimal (q/?) — all keys are in the `?` overlay.
+**Layout**: responsive — 78×14+ two columns, narrower stacks into one column
+(device · ANC · [media] · volume · quick · mic). Every tile is allocated at
+its content minimum first (bordered tiles never get fewer than 3 rows, the mic
+scope 6, the media tile 5); tiles that cannot reach that are dropped and the
+rest re-fitted, so nothing is ever rendered clipped or blank. The mic scope
+shows the incoming XM5 track live (pw-cat capture, ~8 fps, dB + last level in
+accent blue); when there is no device or the mic is inactive, a hint about mic
+mode appears. The footer shows the armed quick chips plus the current
+mode/profile on the right — both sides are width-budgeted and clipped instead
+of overlapping; all keys are in the `?` overlay.
 
 **Design/animations**: start stagger (tile borders flash in accent blue),
 pod click flash (350 ms), volume changes glow in the bar (accent → gradient),
@@ -98,7 +102,7 @@ are verified against the actually installed Nerd Font (Pango render + cmap):
 confirmation runs in the background (no UI blocking). Status refresh only on
 change (the pilot service writes `~/.local/state/xm5/status.json` every 2 s;
 the TUI reads that file instead of spawning processes) — idle CPU ≈ 0.2 %
-instead of 1.3 %. Layout scales from 52×14 up to fullscreen.
+instead of 1.3 %. Layout scales from 50×17 up to fullscreen.
 
 ## UI sounds
 
