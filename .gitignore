@@ -1,0 +1,9 @@
+# python
+__pycache__/
+*.pyc
+
+# rust
+xm5-tui/target/
+
+# state/logs produced at runtime
+*.log

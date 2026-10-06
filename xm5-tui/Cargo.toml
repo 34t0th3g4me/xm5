@@ -1,0 +1,16 @@
+[package]
+name = "xm5-tui"
+version = "1.0.0"
+edition = "2024"
+
+[dependencies]
+ratatui = "0.29"
+crossterm = "0.28"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+parking_lot = "0.12"
+
+[profile.release]
+lto = true
+strip = true
+codegen-units = 1

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>xm5 mic test</title>
+<style>
+ body{font-family:monospace;background:#111;color:#ddd;padding:2rem;max-width:720px}
+ h1{color:#7dd87d} button{font-size:1.2rem;padding:.6rem 1.4rem;margin:.5rem .3rem;cursor:pointer}
+ #st{white-space:pre-wrap;font-size:1.05rem;line-height:1.5}
+ .ok{color:#7dd87d}.bad{color:#ff6b6b}
+ canvas{background:#000;margin-top:1rem;width:100%;height:120px}
+ select,option{font-size:1rem;padding:.3rem}
+</style></head>
+<body>
+<h1>XM5 Mikrofon-Test</h1>
+<label>Input:</label> <select id="dev"></select>
+<button id="go">Start</button><button id="stop">Stop</button>
+<div id="st">idle</div>
+<canvas id="vis" width="700" height="120"></canvas>
+<script>
+const st = document.getElementById("st");
+let stream=null, audioCtx=null, raf=null;
+async function listDevs(){
+  const ds = await navigator.mediaDevices.enumerateDevices();
+  const sel = document.getElementById("dev"); sel.innerHTML="";
+  ds.filter(d=>d.kind==="audioinput").forEach((d,i)=>{
+    const o=document.createElement("option");
+    o.value=d.deviceId; o.textContent=(d.label||"device "+i);
+    sel.appendChild(o);
+  });
+  st.textContent = "Inputs: " + ds.filter(d=>d.kind==="audioinput")
+    .map(d=>d.label||"(label hidden)").join("\n");
+}
+async function start(){
+  const id = document.getElementById("dev").value;
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({audio:{deviceId:id?{exact:id}:undefined}});
+    const track = stream.getAudioTracks()[0];
+    const settings = track.getSettings();
+    st.className="ok";
+    st.textContent = "MIC LIVE ✔\ntrack.label: "+track.label
+      +"\nsettings: "+JSON.stringify(settings,null,1);
+    audioCtx = new AudioContext();
+    const src = audioCtx.createMediaStreamSource(stream);
+    const analyser = audioCtx.createAnalyser(); analyser.fftSize=1024;
+    src.connect(analyser);
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    const cv = document.getElementById("vis"), ctx = cv.getContext("2d");
+    (function draw(){
+      raf = requestAnimationFrame(draw);
+      analyser.getByteTimeDomainData(data);
+      ctx.fillStyle="#000"; ctx.fillRect(0,0,700,120);
+      ctx.strokeStyle="#7dd87d"; ctx.beginPath();
+      for(let i=0;i<data.length;i+=4){ctx.lineTo(i*700/data.length, data[i]*120/256);}
+      ctx.stroke();
+    })();
+  }catch(e){ st.className="bad"; st.textContent = "ERROR: "+e.name+" "+e.message; }
+}
+function stop(){ if(stream)stream.getTracks().forEach(t=>t.stop()); if(audioCtx)audioCtx.close();
+  cancelAnimationFrame(raf); st.textContent="stopped"; listDevs(); }
+document.getElementById("go").onclick=start;
+document.getElementById("stop").onclick=stop;
+listDevs();
+</script></body></html>
