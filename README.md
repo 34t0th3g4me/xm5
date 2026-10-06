@@ -1,22 +1,23 @@
-# xm5 – Sony WH-1000XM5 Controller für Linux
+# xm5 – Sony WH-1000XM5 Controller for Linux
 
-TUI + CLI für die Sony WH-1000XM5 (funktioniert mit jedem BT-Headset): Profilwechsel
-Musik ⇄ Mikrofon, Lautstärke, Mikrofon-Enhancement, Reparatur, Akku.
-Getestet auf Omarchy (Arch + PipeWire + Hyprland); läuft auch unter Ubuntu
-(PipeWire **oder** PulseAudio – beides wird über `pactl` abgedeckt).
+TUI + CLI for the Sony WH-1000XM5 (works with any BT headset): profile switching
+music ⇄ microphone, volume, mic enhancement, repair, battery.
+Tested on Omarchy (Arch + PipeWire + Hyprland); also runs on Ubuntu
+(PipeWire **or** PulseAudio — both are covered via `pactl`).
 
-## Warum das nötig ist
+## Why this is needed
 
-Im Bluetooth-Musikmodus (A2DP) gibt es kein Headset-Mikrofon. Normale Desktops
-schalten dann automatisch auf HFP um, sobald irgendein Client das Mikrofon
-anfragt (inklusive WebRTC-Geräte-Scans im Browser!) — jede Umschaltung ist als
-Disconnect-Aussetzer hörbar, und XM5-Jingles nerven.
+In Bluetooth music mode (A2DP) there is no headset microphone. Ordinary desktops
+then automatically switch to HFP as soon as any client asks for the microphone
+(including WebRTC device scans in the browser!) — every switch is audible as a
+disconnect glitch, and the XM5 jingles get annoying.
 
-Der Fix in WirePlumber: `bluez5.autoswitch-to-headset-profile = false`
+The fix in WirePlumber: `bluez5.autoswitch-to-headset-profile = false`
 (`~/.config/wireplumber/wireplumber.conf.d/51-no-xm5-autoswitch.conf`).
-Das XM5-Mikrofon läuft danach als **A2DP-Source parallel** (16 kHz, volle
-Musik-Qualität bleibt) — Browser/Calls erkennen es sofort, ohne Profilflip.
-Der klassische HFP-Modus bleibt manuell per TUI (`V`) oder `xm5 mode mic`.
+Afterwards the XM5 mic runs as an **A2DP source in parallel** (16 kHz, music
+quality stays untouched) — browsers/calls detect it immediately, without a
+profile flip. Classic HFP mode remains available manually via the TUI (`V`)
+or `xm5 mode mic`.
 
 
 ## Installation
@@ -27,40 +28,40 @@ cd xm5
 python3 install.py
 ```
 
-Das installiert alles: `xm5` in `~/.local/bin`, die systemd-User-Unit und die
-Hyprland-Shortcuts (nur Omarchy). Rust-Toolchain wird automatisch benutzt, wenn
-vorhanden (`xm5-tui` wird gebaut); sonst liegt nur die Python-Engine + CLI da.
+This installs everything: `xm5` in `~/.local/bin`, the systemd user unit and
+the Hyprland shortcuts (Omarchy only). The Rust toolchain is used automatically
+when present (builds `xm5-tui`); otherwise you just get the Python engine + CLI.
 
-Das macht:
-1. Rust-TUI: `~/.local/bin/xm5-tui-bin` (+ Wrapper `xm5-tui`) — gebaut falls nötig
+What it does:
+1. Rust TUI: `~/.local/bin/xm5-tui-bin` (+ wrapper `xm5-tui`) — built if needed
 2. `~/.local/bin/xm5` (+ `xm5-music`, `xm5-mic`, `xm5-toggle`, `xm5-volup`, `xm5-voldown`, `xm5-repair`)
-3. systemd-User-Unit `xm5-pilot.service` (hält Profil + Default-Senke/Quelle auch nach Reconnects stabil, loggt in `~/.config/xm5/pilot.log`)
-4. Hyprland-Shortcuts (nur Omarchy):
-   - `SUPER + ALT + M` → TUI öffnen (wiederholt: fokussieren)
-   - `SUPER + ALT + SHIFT + UP/DOWN` → Lautstärke ±5 % (wiederholbar)
-   - `SUPER + ALT + SHIFT + R` → Reparatur
-   - (Plain `SUPER+ALT+UP/DOWN` bleibt für Omarchy's Fenster-Gruppen belegt)
+3. systemd user unit `xm5-pilot.service` (keeps profile + default sink/source stable across reconnects, logs to `~/.config/xm5/pilot.log`)
+4. Hyprland shortcuts (Omarchy only):
+   - `SUPER + ALT + M` → open TUI (again: focus it)
+   - `SUPER + ALT + SHIFT + UP/DOWN` → volume ±5 % (repeatable)
+   - `SUPER + ALT + SHIFT + R` → repair
+   - (plain `SUPER+ALT+UP/DOWN` stays reserved for Omarchy's window groups)
 
-Unter Ubuntu/GNOME: TUI einfach über `xm5` im Terminal starten; die Shortcuts
-kannst du unter Einstellungen › Tastatur › Kürzel anlegen (`xm5-toggle`,
+On Ubuntu/GNOME: just start the TUI with `xm5` in a terminal; you can add the
+shortcuts under Settings › Keyboard › Custom Shortcuts (`xm5-toggle`,
 `xm5-volup`, `xm5-voldown`).
 
-## TUI (Nothing-X-Look, 2-spaltig, Maus)
+## TUI (Nothing-X look, 2 columns, mouse)
 
 ```sh
-xm5          # öffnet das TUI-Dashboard (xm5-tui)
-xm5-tui      # direkt
+xm5          # opens the TUI dashboard (xm5-tui)
+xm5-tui      # directly
 ```
 
-Dichtes 2-Spalten-Dashboard im Nothing-X-Stil (near-black, graue Kacheln,
-runde Borders, weiße aktive Pods, grüner Status-Dot):
+Dense two-column dashboard in the Nothing-X style (near-black, gray tiles,
+rounded borders, white active pods, green status dot):
 
 ```
  ● WH-1000XM5  auto    󰂁 80%
 ╭ device ────────────╮╭ noise cancel ────────────────╮
 │ 󰋎 SONY WH-1000XM5  ││   ╭─────╮   ╭─────╮  ╭─────╮  │
 │ mode music [aac]   ││   │ 󰆩 │   │ 󰙅 │  │ 󰋐 │  │
-│ 󰂯 verbunden · …    ││   ╰─────╯   ╰─────╯  ╰─────╯  │
+│ 󰂯 connected · …    ││   ╰─────╯   ╰─────╯  ╰─────╯  │
 ╰────────────────────╯│ noise cancel  ambient   off   │
                       │  15 ━━━━━━━━━━━━━━━  54%      │
 ╭ volume ────────────╮╭ quick ────────────────────────╮
@@ -70,108 +71,109 @@ runde Borders, weiße aktive Pods, grüner Status-Dot):
 ╭ mic DSP ●╮ ╭ repair bluetooth ╮ ╭ ● auto pilot ╮
 ```
 
-**Maus**: Pods anklicken (ANC/Ambient/Off), in der Volumen-Tick-Leiste
-klicken+ziehen (direkte Position), Mausrad = Volume ±3, alle Chips
-anklickbar (auch `auto` = Pilot-Modus umschalten).
+**Mouse**: click pods (ANC/ambient/off), click+drag in the volume tick bar
+(direct position), mouse wheel = volume ±3, all chips clickable (including
+`auto` = toggle pilot mode).
 
-**Tasten**: `1`/`2`/`3` Pods · `←`/`→` Pods · `↑`/`↓` ANC-Level (1-28) ·
-`+`/`-` Volume · `m/v/t` Musik/Mikro/Toggle · `e` mic-DSP · `r` Reparatur ·
-`F` Refresh · `q` Beenden
+**Keys**: `1`/`2`/`3` pods · `←`/`→` pods · `↑`/`↓` ANC level (1–28) ·
+`+`/`-` volume · `m/v/t` music/mic/toggle · `e` mic DSP · `r` repair ·
+`F` refresh · `q` quit
 
-**Layout**: Responsive — 78×13+ zweispaltig, schmaler einspaltig gestapelt
-(device · ANC · volume · quick · Mikrofon). Die Kachel-Höhen wachsen
-rund-robin (Volume → ANC → Mic → Device → Quick). Der Mikrofon-Skop zeigt
-die ankommende XM5-Spur live (pw-cat-Capture, ~8 fps, dB + letzter Pegel
-in Akzentblau); bei 'kein gerät' oder inaktivem Mic erscheint der Hinweis
-zum Mic-Modus. Footer minimal (q/? ) — alle Tasten im '?'-Overlay.
+**Layout**: responsive — 78×13+ two columns, narrower stacks into one column
+(device · ANC · volume · quick · mic). Tile heights grow round-robin
+(volume → ANC → mic → device → quick). The mic scope shows the incoming XM5
+track live (pw-cat capture, ~8 fps, dB + last level in accent blue); when
+there is no device or the mic is inactive, a hint about mic mode appears.
+Footer is minimal (q/?) — all keys are in the `?` overlay.
 
-**Design/Animationen**: Start-Stagger (Kachel-Borders blitzen akzentblau
-gestaffelt), Pod-Click-Flash (350 ms), Volume-Änderungen glühen im Balken
-(Akzent → Gradient), Status-Dot atmet (2,4 s), Toast mit Akzent-Pop-in +
-Fade-out. Alle Icons sind gegen die tatsächlich installierte Nerd-Font
-verifiziert (Pango-Render + cmap): 󰖔 ANC (Mond), 󰞍 Wellen (Ambient),
-󰋐 Headset-Off, 󰝚 Musik, 󰓡 Swap, 󰘮 Tuner (DSP), 󰒓 Zahnrad (Repair),
-󰁨 Auto-Fix (Pilot), 󰂯 Bluetooth, Battery-Leiter. Respektiert `NO_COLOR`.
+**Design/animations**: start stagger (tile borders flash in accent blue),
+pod click flash (350 ms), volume changes glow in the bar (accent → gradient),
+status dot breathes (2.4 s), toast with accent pop-in + fade-out. All icons
+are verified against the actually installed Nerd Font (Pango render + cmap):
+󰖔 ANC (moon), 󰞍 waves (ambient), 󰋐 headset-off, 󰝚 music, 󰓡 swap, 󰘮 tuner (DSP),
+󰒓 gear (repair), 󰁨 auto-fix (pilot), 󰂯 bluetooth, battery ladder. Respects
+`NO_COLOR`.
 
-**Latenz**: Pod- und Level-Klicks greifen sofort (optimistisch); die XM5-
-Bestätigung läuft im Hintergrund (kein UI-Block). Status-Refresh nur bei
-Änderung (der Pilot-Service schreibt `~/.local/state/xm5/status.json` alle 2 s;
-das TUI liest die Datei statt Prozesse zu starten) — idle-CPU ≈ 0,2 % statt
-1,3 %. Layout skaliert von 52×14 bis Vollbild.
+**Latency**: pod and level clicks apply immediately (optimistic); the XM5
+confirmation runs in the background (no UI blocking). Status refresh only on
+change (the pilot service writes `~/.local/state/xm5/status.json` every 2 s;
+the TUI reads that file instead of spawning processes) — idle CPU ≈ 0.2 %
+instead of 1.3 %. Layout scales from 52×14 up to fullscreen.
 
-## UI-Sounds
+## UI sounds
 
-`xm5` spielt kurze synth-Jingles beim Moduswechsel (`sounds/*.wav`):
+`xm5` plays short synth jingles on mode switches (`sounds/*.wav`):
 `music`, `mic`, `connected`, `power_on`, `power_off`, `error`.
-Für ANC/Volume **keine PC-Sounds** — die XM5 spielt dafür selbst ihren
-Geräte-Jingle (sonst doppelt). Ausschalten mit `XM5_SOUNDS=0`.
+For ANC/volume **there are no PC sounds** — the XM5 plays its own device
+jingle for those (otherwise double). Turn off with `XM5_SOUNDS=0`.
 
-## Bekanntes Problem (behoben)
+## Known issue (fixed)
 
-Sony WH-1000XM5 stirbt beim Profilwechsel gern inside: der HFP-SCO-Transport
-lieft dann nur Nullen (Mik "nichts ankommen"), obwohl alles "verbunden" aussieht.
-`xm5` erkennt das seit 2026-10-05 automatisch:
-- `xm5 mode mic` und `xm5 repair` prüfen nach dem Umschalten die Mikrofon-Daten (`mic_alive`)
-- Bei totem SCO-Link folgt automatisch ein Disconnect/Reconnect + Profil-Reset
-- Danach liefern der Browser und pw-record wieder echte Samples.
+The Sony WH-1000XM5 likes to die mid profile switch: the HFP SCO transport
+then only delivers zeros (mic receives nothing) even though everything looks
+"connected". `xm5` detects this automatically since 2026-10-05:
+- `xm5 mode mic` and `xm5 repair` verify mic data after switching (`mic_alive`)
+- With a dead SCO link it automatically disconnects/reconnects + resets profile
+- Afterwards the browser and pw-record deliver real samples again.
 
-Falls es hängt: einfach `xm5 repair` (oder TUI-Taste `R`).
+If it ever hangs: just run `xm5 repair` (or TUI key `R`).
 
 ## CLI
 
 ```sh
-xm5 status                 # JSON-Status (Profil, Codec, Volume, Akku)
-xm5 mode music             # A2DP AAC (Musik, kein Mic)
-xm5 mode mic               # HSP/HFP MSBC (Mic aktiv)
-xm5 mode toggle            # umschalten
-xm5 mode auto              # Pilot-Service aktivieren (defaults repair)
+xm5 status                 # JSON status (profile, codec, volume, battery)
+xm5 mode music             # A2DP AAC (music, no mic)
+xm5 mode mic               # HSP/HFP MSBC (mic active)
+xm5 mode toggle            # switch
+xm5 mode auto              # enable pilot service (repairs defaults only)
 xm5 volume + | - | 90 | max | set 70
 xm5 mic-enhance on|off|toggle|status
-xm5 anc on|off             # Noise Cancelling an/aus (direkt am XM5, RFCOMM)
-xm5 anc ambient 12         # Ambient-Sound-Modus, Pegel 1-28
-xm5 anc voice 10           # Voice-Focus (Umgebung + Stimmen)
-xm5 anc status             # letzter gesetzter Zustand
+xm5 anc on|off             # noise cancelling on/off (directly on the XM5, RFCOMM)
+xm5 anc ambient 12         # ambient sound mode, level 1–28
+xm5 anc voice 10           # voice focus (ambient + voices)
+xm5 anc status             # last applied state
 xm5 battery
-xm5 repair                 # kaputte BT-Audio-Verbindung reparieren
-xm5 discover               # gepaarte BT-Geräte anzeigen
+xm5 repair                 # repair broken BT audio connection
+xm5 discover               # list paired BT devices
 ```
 
-## Noise Cancelling / Ambient Sound
+## Noise cancelling / ambient sound
 
-Läuft über Sony's proprietäres RFCOMM-Protokoll (Kanal 9, Service
-`956c7b26-…`) - gleicher Weg wie die offizielle App:
-- `A` im TUI = ANC an, `C` = ANC/ASM komplett aus, `V` = Voice-Focus
-- `xm5 anc ambient <level>` = Umgebung mit einstellbarem Pegel (1-28)
-- Der XM5 bestätigt jeden Befehl mit ACK; Zustand liegt in `~/.local/state/xm5/anc`
+Runs over Sony's proprietary RFCOMM protocol (channel 9, service
+`956c7b26-…`) — same path as the official app:
+- `A` in the TUI = ANC on, `C` = ANC/ASM fully off, `V` = voice focus
+- `xm5 anc ambient <level>` = ambience with adjustable level (1–28)
+- The XM5 ACKs every command; state lives in `~/.local/state/xm5/anc`
 
-## Mikrofon-Enhancement (Rauschunterdrückung + Auto-Gain)
+## Mic enhancement (noise suppression + auto gain)
 
-`xm5 mic-enhance on` lädt PipeWire `module-echo-cancel` mit WebRTC-Audio-Processing:
-Noise-Suppression, High-Pass-Filter (tastert RUMS/Blower der XM5 weg), Digital-AGC.
-Das erzeugt eine neue Quelle `xm5_enhanced_mic` und setzt sie als Default – **jeder
-Browser und jede App**, die das Pulsesource-Default nimmt, bekommt automatisch das
-verbesserte Mic. Im Musik-Modus (kein Mic verfügbar) wird es automatisch deaktiviert.
+`xm5 mic-enhance on` loads PipeWire `module-echo-cancel` with WebRTC audio
+processing: noise suppression, high-pass filter (removes XM5 rumble/blower),
+digital AGC. It creates a new source `xm5_enhanced_mic` and makes it default —
+**every browser and every app** that uses the pulse default source
+automatically gets the improved mic. In music mode (no mic available) it is
+deactivated automatically.
 
-## Automatik (Pilot-Service)
+## Automation (pilot service)
 
-`xm5-pilot.service` (User-Unit) überwacht alle 2 s:
-- Headset verschwindet → Mic-Enhancement wird entladen (keine toten Mic-Nodes für Browser)
-- Headset reconnectet → gewünschter Modus (aus letzter TUI-/CLI-Aktion) wird wiederhergestellt und Default-Sink/-Source korrekt gesetzt
-- `xm5 mode auto` schaltet die Profil-Erzwingung aus (nur Defaults reparieren)
+`xm5-pilot.service` (user unit) monitors every 2 s:
+- Headset disappears → mic enhancement is unloaded (no dead mic nodes for browsers)
+- Headset reconnects → desired mode (from the last TUI/CLI action) is restored and default sink/source are set correctly
+- `xm5 mode auto` turns off profile forcing (only repair defaults)
 
-Logs: `~/.config/xm5/pilot.log` · Modus-State: `~/.local/state/xm5/mode`
+Logs: `~/.config/xm5/pilot.log` · mode state: `~/.local/state/xm5/mode`
 
-## Abhängigkeiten
+## Dependencies
 
-- `pactl` (pipewire-pulse oder pulseaudio) – auf Omarchy & Ubuntu standardmäßig drauf
+- `pactl` (pipewire-pulse or pulseaudio) — present by default on Omarchy & Ubuntu
 - `bluetoothctl` (bluez)
-- Python 3 mit `curses` (Standard)
+- Python 3 with `curses` (standard)
 
-## Deinstallation
+## Uninstall
 
 ```sh
 systemctl --user disable --now xm5-pilot.service
 rm ~/.config/systemd/user/xm5-pilot.service
 rm ~/.local/bin/xm5*
-# Hyprland-Block in ~/.config/hypr/bindings.lua löschen ("XM5 headset")
+# remove the Hyprland block in ~/.config/hypr/bindings.lua ("XM5 headset")
 ```

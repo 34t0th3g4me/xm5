@@ -536,8 +536,8 @@ def play_sound(name: str):
 
 
 def mic_alive(mac, seconds=1.6):
-    """True wenn die BT-Quelle echte Nicht-Stille-Daten liefert (toten SCO-Transport erkennen).
-    Schreibt kurz in ein temporaeres wav via pw-record und prueft den Peak."""
+    """True when the BT source delivers real non-silence data (detecting a dead SCO transport).
+    Records briefly into a temp wav via pw-record and checks the peak."""
     try:
         path = "/tmp/xm5_mic_probe.wav"
         if os.path.exists(path):
@@ -1018,7 +1018,7 @@ def mpris_media_status():
     except Exception:
         pass
     if not players:
-        players = [{"identity": "kein player", "status": "none"}]
+        players = [{"identity": "no player", "status": "none"}]
     return players
 
 def _player_by_index(idx):
@@ -1026,7 +1026,7 @@ def _player_by_index(idx):
     bus = _dbusb()
     pls = _mpris_players(bus)
     if not pls:
-        raise RuntimeError("kein MPRIS player aktiv")
+        raise RuntimeError("no MPRIS player active")
     i = max(0, min(idx, len(pls) - 1))
     return pls[i][0], pls[i][1], dbus.Interface(pls[i][1], _MPRIS_IFACE)
 

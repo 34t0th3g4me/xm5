@@ -664,11 +664,11 @@ fn quick_tile(f: &mut Frame, inner: Rect, app: &mut App) -> String {
     let grid_y0 = if show_status { q_rows[0].y + 1 } else { q_rows[0].y };
     if show_status {
         let status_line = if !connected {
-            Span::styled(" getrennt — r repariert", Style::default().fg(RED))
+            Span::styled(" disconnected — r repairs", Style::default().fg(RED))
         } else if app.status.pilot {
-            Span::styled(format!(" toggle → {} · auto-wächter an", next_mode), Style::default().fg(FAINT))
+            Span::styled(format!(" toggle → {} · auto guard on", next_mode), Style::default().fg(FAINT))
         } else {
-            Span::styled(format!(" toggle → {} · auto aus", next_mode), Style::default().fg(FAINT))
+            Span::styled(format!(" toggle → {} · auto off", next_mode), Style::default().fg(FAINT))
         };
         f.render_widget(
             Line::from(vec![status_line]),
@@ -702,7 +702,7 @@ fn quick_tile(f: &mut Frame, inner: Rect, app: &mut App) -> String {
     } else if app.status.connected {
         "standby".into()
     } else {
-        "getrennt".into()
+        "disconnected".into()
     }
 }
 
@@ -892,21 +892,21 @@ fn media_tile(f: &mut Frame, area: Rect, app: &mut App) {
     let player = app.media.player.clone();
     let w = area.width;
     let h = area.height;
-    // one-row compact (stacked, media_h=3 → inner h=1): "󰝚 spotify · spielt · track"
+    // one-row compact (stacked, media_h=3 → inner h=1): "󰝚 spotify · playing · track"
     if h < 2 {
         let p = match app.media.player.clone() {
             Some(p) => p,
             None => {
                 f.render_widget(
-                    Line::from(Span::styled(" 󰝚 medienspieler — player mit MPRIS (spotify, mpv, firefox …)", Style::default().fg(FAINT))),
+                    Line::from(Span::styled(" 󰝚 media player — player with MPRIS (spotify, mpv, firefox …)", Style::default().fg(FAINT))),
                     Rect { x: area.x + 1, y: area.y, width: w.saturating_sub(2), height: 1 },
                 );
                 return;
             }
         };
         let stat = match p.status.as_str() {
-            "playing" => "spielt",
-            "paused" => "pausiert",
+            "playing" => "playing",
+            "paused" => "paused",
             _ => "stop",
         };
         let track = if !p.title.is_empty() {
@@ -954,7 +954,7 @@ fn media_tile(f: &mut Frame, area: Rect, app: &mut App) {
     // call banner: any client capturing (Teams, meet, obs…) — colored chip
     if has_calls {
         let names = app.media.calls.join(", ");
-        let chip = format!(" 󰔰 {} {}", names, if app.media.calls.len() == 1 { "im call (mik)" } else { "im call" });
+        let chip = format!(" 󰔰 {} {}", names, if app.media.calls.len() == 1 { "in call (mic)" } else { "in call" });
         let cw = ((names.chars().count() + 22) as u16).min(w.saturating_sub(2));
         f.render_widget(
             Line::from(Span::styled(
@@ -973,7 +973,7 @@ fn media_tile(f: &mut Frame, area: Rect, app: &mut App) {
         f.render_widget(
             Line::from(vec![
                 Span::styled(" 󰝚 ", Style::default().fg(DIM)),
-                Span::styled("keine medienwiedergabe — player mit MPRIS (spotify, firefox, mpv …)", Style::default().fg(FAINT)),
+                Span::styled("no media playback — player with MPRIS (spotify, firefox, mpv …)", Style::default().fg(FAINT)),
             ]),
             Rect { x: area.x, y: msg_y, width: w.saturating_sub(1), height: 1 },
         );
@@ -989,9 +989,9 @@ fn media_tile(f: &mut Frame, area: Rect, app: &mut App) {
         p.identity.clone()
     };
     let stat = match p.status.as_str() {
-        "playing" => "spielt",
-        "paused" => "pausiert",
-        _ => "gestoppt",
+        "playing" => "playing",
+        "paused" => "paused",
+        _ => "stopped",
     };
     let l1 = Line::from(vec![
         Span::styled(" 󰝚 ", Style::default().fg(if playing { GREEN } else { DIM })),
@@ -1145,7 +1145,7 @@ fn draw_scope(f: &mut Frame, inner: Rect, area: Rect, app: &App) {
         let mid = Rect { x: inner.x + 1, y: area.y + center as u16, width: area.width, height: 1 };
         f.render_widget(
             Line::from(Span::styled(
-                " stumm — mic nimmt nichts auf".to_string(),
+                " muted — mic picks up nothing".to_string(),
                 Style::default().fg(FAINT),
             )),
             mid,
@@ -1214,7 +1214,7 @@ fn draw(f: &mut Frame, app: &mut App) {
     if !fits_wide && !fits_narrow {
         f.render_widget(
             Paragraph::new(Span::styled(
-                if h < 13 && w < 78 && w >= 50 { "breiter machen (min 78 spalten)" } else { "terminal zu klein (min 50×17 · 78×13)" },
+                if h < 13 && w < 78 && w >= 50 { "make it wider (min 78 columns)" } else { "terminal too small (min 50×17 · 78×13)" },
                 Style::default().fg(DIM),
             ))
             .alignment(ratatui::layout::Alignment::Center),
@@ -1401,7 +1401,7 @@ fn draw(f: &mut Frame, app: &mut App) {
                         if app.status.connected {
                             format!("  ·  {}", profile_show(&app.status.profile))
                         } else {
-                            "  ·  getrennt · drück r".to_string()
+                            "  ·  disconnected · press r".to_string()
                         },
                         Style::default().fg(if app.status.connected { DIM } else { RED }),
                     ),
@@ -1446,9 +1446,9 @@ fn draw(f: &mut Frame, app: &mut App) {
                         Span::styled("󰂯 ", Style::default().fg(if app.status.connected { GREEN } else { FAINT })),
                         Span::styled(
                             if app.status.connected {
-                                format!("verbunden · {}", profile_show(&app.status.profile))
+                                format!("connected · {}", profile_show(&app.status.profile))
                             } else {
-                                "getrennt · drück r".to_string()
+                                "disconnected · press r".to_string()
                             },
                             Style::default().fg(if app.status.connected { DIM } else { RED }),
                         ),
@@ -1553,7 +1553,7 @@ fn draw(f: &mut Frame, app: &mut App) {
                 .clamp(0.0, 100.0) as u8;
             format!("{:>3}% ", g)
         } else {
-            format!("{:>3}%{}", vol_show, if muted { " · stumm" } else { "" })
+            format!("{:>3}%{}", vol_show, if muted { " · muted" } else { "" })
         };
         f.render_widget(
             Line::from(vec![
@@ -1604,7 +1604,7 @@ fn draw(f: &mut Frame, app: &mut App) {
         } else {
             media_area
         };
-        let media_inner = tile(f, media_final, Some(("medien", DIM)), stagger_border(app, if stacked { 3 } else { 4 }));
+        let media_inner = tile(f, media_final, Some(("media", DIM)), stagger_border(app, if stacked { 3 } else { 4 }));
         media_tile(f, media_inner, &mut *app);
     }
 
@@ -1622,7 +1622,7 @@ fn draw(f: &mut Frame, app: &mut App) {
         } else {
             Rect { x: mx, y: outer[3].y, width: content_w, height: outer[3].height }
         };
-        let mic_inner = tile(f, mic_area, Some(("mikrofon", DIM)), stagger_border(app, if stacked { 4 } else { 5 }));
+        let mic_inner = tile(f, mic_area, Some(("microphone", DIM)), stagger_border(app, if stacked { 4 } else { 5 }));
         let m_rows = Layout::default()
             .direction(Direction::Vertical)
             .constraints(if mic_inner.height >= 2 {
@@ -1639,7 +1639,7 @@ fn draw(f: &mut Frame, app: &mut App) {
         } else if app.mic.src.is_empty() {
             String::new()
         } else if app.mic.src.starts_with("alsa_input") {
-            "intern".to_string()
+            "internal".to_string()
         } else {
             app.mic.src.chars().take(18).collect()
         };
@@ -1652,26 +1652,26 @@ fn draw(f: &mut Frame, app: &mut App) {
                     Style::default().fg(DIM),
                 ),
                 Span::styled(
-                    if app.status.enhance { "   󰘮 dsp an" } else { "   󰘮 dsp aus" },
+                    if app.status.enhance { "   󰘮 dsp on" } else { "   󰘮 dsp off" },
                     Style::default().fg(if app.status.enhance { GREEN } else { FAINT }),
                 ),
             ]
         } else if !app.status.connected {
             vec![
                 Span::styled(" 󰋎 ", Style::default().fg(DIM)),
-                Span::styled("kein gerät", Style::default().fg(DIM)),
+                Span::styled("no device", Style::default().fg(DIM)),
                 Span::styled(
-                    if app.status.enhance { "   󰘮 dsp an" } else { "   󰘮 dsp aus" },
+                    if app.status.enhance { "   󰘮 dsp on" } else { "   󰘮 dsp off" },
                     Style::default().fg(if app.status.enhance { GREEN } else { FAINT }),
                 ),
             ]
         } else {
             vec![
                 Span::styled(" 󰋎 ", Style::default().fg(DIM)),
-                Span::styled("inaktiv", Style::default().fg(DIM)),
-                Span::styled(" — mic-modus mit v", Style::default().fg(DIM)),
+                Span::styled("idle", Style::default().fg(DIM)),
+                Span::styled(" — mic mode via v", Style::default().fg(DIM)),
                 Span::styled(
-                    if app.status.enhance { "   󰘮 dsp an" } else { "   󰘮 dsp aus" },
+                    if app.status.enhance { "   󰘮 dsp on" } else { "   󰘮 dsp off" },
                     Style::default().fg(if app.status.enhance { GREEN } else { FAINT }),
                 ),
             ]
@@ -1683,7 +1683,7 @@ fn draw(f: &mut Frame, app: &mut App) {
         } else if mic_inner.height == 2 {
             draw_scope(f, mic_inner, m_rows[0], app);
         } else {
-            // one-row fallback: " 󰋎  inaktiv" / " 󰋎 live · 6 dB ▁▅█▂.."
+            // one-row fallback: " 󰋎  idle" / " 󰋎 live · 6 dB ▁▅█▂.."
             let width = (mic_inner.width.saturating_sub(4) as usize).max(0);
             if width >= 6 {
                 let compact_info: Vec<Span<'static>> = vec![
@@ -1696,7 +1696,7 @@ fn draw(f: &mut Frame, app: &mut App) {
                 let mut spans = compact_info;
                 if !app.mic.live {
                     spans.push(Span::styled(
-                        if app.status.connected { "inaktiv" } else { "kein gerät" },
+                        if app.status.connected { "idle" } else { "no device" },
                         Style::default().fg(FAINT),
                     ));
                 }
@@ -1746,7 +1746,7 @@ fn draw(f: &mut Frame, app: &mut App) {
             ));
             spans.push(Span::raw(" "));
         }
-        spans.push(Span::styled("+/− laut · q fertig", Style::default().fg(FAINT)));
+        spans.push(Span::styled("+/− vol · q done", Style::default().fg(FAINT)));
         f.render_widget(Paragraph::new(Line::from(spans)), Rect { x: mx, y: foot_y, width: content_w, height: 1 });
         f.render_widget(
             Paragraph::new(Span::styled(quick_ui.clone(), Style::default().fg(DIM)))
@@ -1761,25 +1761,25 @@ fn draw(f: &mut Frame, app: &mut App) {
         let hh = 17u16.min(h.saturating_sub(4));
         let hr = Rect { x: (w.saturating_sub(hw)) / 2, y: (h.saturating_sub(hh)) / 2, width: hw, height: hh };
         f.render_widget(ratatui::widgets::Clear, hr);
-        let hi = tile(f, hr, Some(("tasten", ACCENT)), None);
+        let hi = tile(f, hr, Some(("keys", ACCENT)), None);
         let rows: [(&str, &str, bool); 17] = [
             ("1·2·3 / a", "anc: nc · ambient · off", true),
-            ("↑/↓", "anc stufe", true),
-            ("←/→", "pod wechselt", true),
-            ("+ / −", "lauter / leiser", false),
+            ("↑/↓", "anc level", true),
+            ("←/→", "switch pod", true),
+            ("+ / −", "volume up / down", false),
             ("M", "music (a2dp)", false),
             ("V", "mic (hfp)", false),
             ("T", "music ⇄ mic", false),
             ("E", "mic dsp (echo-cancel)", false),
-            ("A", "auto-wächter an/aus", false),
-            ("R", "bluetooth reparieren", false),
-            ("Space", "wiedergabe play/pause", false),
-            ("N / B", "nächster / voriger track", false),
-            ("J / L", "−10 s / +10 s im track", false),
-            ("X", "wiedergabe stoppen", false),
-            ("F", "status aktualisieren", false),
-            ("Maus", "pods klicken · medien-tasten klicken · volumen ziehen", false),
-            ("q/esc", "beenden (esc schließt hilfe)", false),
+            ("A", "auto guard on/off", false),
+            ("R", "repair bluetooth", false),
+            ("Space", "playback play/pause", false),
+            ("N / B", "next / previous track", false),
+            ("J / L", "−10 s / +10 s in track", false),
+            ("X", "stop playback", false),
+            ("F", "refresh status", false),
+            ("Mouse", "click pods · click media keys · drag volume", false),
+            ("q/esc", "quit (esc closes help)", false),
         ];
         for (i, (k, d, _grp)) in rows.iter().enumerate() {
             if k.is_empty() {
@@ -1796,7 +1796,7 @@ fn draw(f: &mut Frame, app: &mut App) {
         }
         f.render_widget(
             Line::from(Span::styled(
-                " esc schließt".to_string(),
+                " esc closes".to_string(),
                 Style::default().fg(FAINT),
             )),
             Rect { x: hi.x, y: hr.y + hh - 1, width: hi.width, height: 1 },
@@ -1808,7 +1808,7 @@ fn draw(f: &mut Frame, app: &mut App) {
         let elapsed = t.at.elapsed();
         let life = if t.spinning { Duration::from_secs(15) } else { Duration::from_secs(3) };
         if elapsed < life {
-            let is_err = !t.spinning && (t.msg.contains("error") || t.msg.contains("fehl") || t.msg.contains("kein "));
+            let is_err = !t.spinning && (t.msg.contains("error") || t.msg.contains("fail") || t.msg.contains("no "));
             let text = if t.spinning {
                 const FRAMES: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
                 let idx = (elapsed.as_millis() / 90) % FRAMES.len() as u128;
@@ -1982,7 +1982,7 @@ fn recv_dirty(rx: &mpsc::Receiver<Msg>, app: &mut App) {
                 app.status = s.clone();
                 // a running resync/spin clears when fresh state arrives
                 if app.toast.as_ref().map(|t| t.spinning).unwrap_or(false)
-                    && app.toast.as_ref().map(|t| t.msg == "aktualisiert").unwrap_or(false)
+                    && app.toast.as_ref().map(|t| t.msg == "refreshed").unwrap_or(false)
                 {
                     app.toast = None;
                 }
@@ -2139,7 +2139,7 @@ fn run_app(mut terminal: Terminal<CrosstermBackend<Stdout>>) -> io::Result<()> {
                     KeyCode::Char(' ') => action_direct(&mut app, &["media-ctl", "0", "playpause"], "play/pause"),
                     KeyCode::Char('x') => action_direct(&mut app, &["media-ctl", "0", "stop"], "stop"),
                     KeyCode::Char('n') => action_direct(&mut app, &["media-ctl", "0", "next"], "skip"),
-                    KeyCode::Char('b') => action_direct(&mut app, &["media-ctl", "0", "prev"], "zurück"),
+                    KeyCode::Char('b') => action_direct(&mut app, &["media-ctl", "0", "prev"], "backward"),
                     KeyCode::Char('j') => action_direct(&mut app, &["media-ctl", "0", "seek", "-10000000"], "−10s"),
                     KeyCode::Char('l') => action_direct(&mut app, &["media-ctl", "0", "seek", "10000000"], "+10s"),
                     KeyCode::Char('F') => {
@@ -2148,7 +2148,7 @@ fn run_app(mut terminal: Terminal<CrosstermBackend<Stdout>>) -> io::Result<()> {
                                 let _ = tx.send(Msg::Status(fetch_status()));
                             });
                         }
-                        toast(&mut app, "aktualisiert", true);
+                        toast(&mut app, "refreshed", true);
                     }
                     _ => {}
                 },
@@ -2188,7 +2188,7 @@ fn run_app(mut terminal: Terminal<CrosstermBackend<Stdout>>) -> io::Result<()> {
                                                 "repair" => "repairing",
                                                 "m_play" => "play/pause",
                                                 "m_next" => "skip",
-                                                "m_prev" => "zurück",
+                                                "m_prev" => "backward",
                                                 "m_back" => "−10s",
                                                 "m_fwd" => "+10s",
                                                 "auto" => "auto mode",
