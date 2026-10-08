@@ -29,11 +29,22 @@ python3 install.py
 ```
 
 This installs everything: `xm5` in `~/.local/bin`, the systemd user unit and
-the Hyprland shortcuts (Omarchy only). The Rust toolchain is used automatically
-when present (builds `xm5-tui`); otherwise you just get the Python engine + CLI.
+the Hyprland shortcuts (Omarchy only). `xm5-tui` is provisioned automatically,
+offline-first, and no network is required:
+
+1. an already-built `xm5-tui/target/release/xm5-tui` is reused, else
+2. a bundled **static** binary `xm5-tui/prebuilt/xm5-tui` (musl static-pie — runs
+   on any glibc/musl distro, no Rust toolchain needed), else
+3. `cargo build --release --offline` against the crates snapshot in
+   `xm5-tui/vendor.tar.xz` (extracted to `~/.cache/xm5`), else
+4. a plain networked `cargo build`, falling back to the bundled binary if that
+   fails.
+
+Without a Rust toolchain the bundled static binary is installed directly, so
+the TUI works even on machines that cannot reach crates.io.
 
 What it does:
-1. Rust TUI: `~/.local/bin/xm5-tui-bin` (+ wrapper `xm5-tui`) — built if needed
+1. `xm5-tui` → `~/.local/bin/xm5-tui-bin` (+ wrapper `xm5-tui`) — provisioned as above
 2. `~/.local/bin/xm5` (+ `xm5-music`, `xm5-mic`, `xm5-toggle`, `xm5-volup`, `xm5-voldown`, `xm5-repair`)
 3. systemd user unit `xm5-pilot.service` (keeps profile + default sink/source stable across reconnects, logs to `~/.config/xm5/pilot.log`)
 4. Hyprland shortcuts (Omarchy only):
@@ -173,11 +184,53 @@ Logs: `~/.config/xm5/pilot.log` · mode state: `~/.local/state/xm5/mode`
 - `bluetoothctl` (bluez)
 - Python 3 with `curses` (standard)
 
+Rust and cargo are **optional**: without them the bundled static `xm5-tui` is
+installed as-is.
+
+### Offline builds
+
+`xm5-tui/vendor.tar.xz` is a snapshot of every crate in `Cargo.lock` (generated
+with `cargo vendor --locked`), so `cargo build --release --locked --offline`
+works with no registry access. For manual builds:
+
+```sh
+cd xm5-tui
+mkdir -p ~/.cache/xm5 && tar -xJf vendor.tar.xz -C ~/.cache/xm5
+cargo build --release --locked --offline \
+  --config 'source.crates-io.replace-with="vendored-sources"' \
+  --config "source.vendored-sources.directory=\"$HOME/.cache/xm5/vendor\""
+```
+
+Refresh the snapshot after changing `Cargo.toml`/`Cargo.lock` (the shipped
+archive has platform `.a`/`.lib`/`.dll` blobs removed — they are Windows-only
+and would otherwise double the size):
+
+```sh
+cd xm5-tui
+rm -rf /tmp/xm5-vendor && mkdir -p /tmp/xm5-vendor
+cargo vendor --locked /tmp/xm5-vendor/vendor
+python3 - <<'EOF'
+import json, pathlib
+for cj in pathlib.Path('/tmp/xm5-vendor/vendor').glob('*/.cargo-checksum.json'):
+    blobs = [f for f in cj.parent.rglob('*')
+             if f.suffix in {'.a', '.lib', '.dll', '.exe', '.pdb', '.rlib'}]
+    if not blobs:
+        continue
+    d = json.loads(cj.read_text())
+    for f in blobs:
+        d.get('files', {}).pop(f.relative_to(cj.parent).as_posix(), None)
+        f.unlink()
+    cj.write_text(json.dumps(d))
+EOF
+tar -cJf vendor.tar.xz -C /tmp/xm5-vendor vendor && rm -rf /tmp/xm5-vendor
+```
+
 ## Uninstall
 
 ```sh
 systemctl --user disable --now xm5-pilot.service
 rm ~/.config/systemd/user/xm5-pilot.service
 rm ~/.local/bin/xm5*
+rm -rf ~/.cache/xm5
 # remove the Hyprland block in ~/.config/hypr/bindings.lua ("XM5 headset")
 ```
